@@ -1,0 +1,8 @@
+dsn: "update_user:update_password@tcp(localhost:3306)/update_db?charset=utf8mb4&parseTime=True&loc=Local"
+delay: 1 # dealy in hour
+update_server_url: "127.0.0.1:9090"
+chache: "../cache"
+log_level: "debug"
+worker_limit: 3
+# #70efff
+# #54a7f0

@@ -1,13 +1,14 @@
-package services
+package service
 
 import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"time"
-	"update-service/pkg/database"
-	"update-service/pkg/lib"
-	"update-service/pkg/models"
+	"update-service/internal/model"
+	"update-service/internal/repository"
+	"update-service/internal/utils"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -17,21 +18,22 @@ import (
 // It communicates with the remote server, checks if updates are needed,
 // downloads the packages, and stores error results in the database.
 type UpdateProvider struct {
-	log                *zap.Logger          // Logger to record internal events and errors
-	updateServerClient UpdateServerClient   // Client to interact with the update server
-	resultTable        database.ResultTable // Interface to store processing results in DB
-	serverTable        database.ServerTable // Interface to store server in DB
-	inputChan          chan *models.Task    // Channel to receive incoming jobs
-	outputChan         chan *models.Task    // Channel to forward jobs after processing
-	cache              string               // Path to local cache directory
+	log                *zap.Logger            // Logger to record internal events and errors
+	updateServerClient UpdateServerClient     // Client to interact with the update server
+	resultTable        repository.ResultTable // Interface to store processing results in DB
+	serverTable        repository.ServerTable // Interface to store server in DB
+	inputChan          chan *model.Task       // Channel to receive incoming jobs
+	outputChan         chan *model.Task       // Channel to forward jobs after processing
+	cache              string                 // Path to local cache directory
+	closeOnce          sync.Once
 }
 
 // NewUpdateProvider creates a new instance of UpdateProvider.
 func NewUpdateProvider(
 	log *zap.Logger,
 	updateServerClient UpdateServerClient,
-	resultTable database.ResultTable,
-	serverTable database.ServerTable,
+	resultTable repository.ResultTable,
+	serverTable repository.ServerTable,
 	cache string,
 	limit int,
 ) *UpdateProvider {
@@ -40,70 +42,70 @@ func NewUpdateProvider(
 		updateServerClient: updateServerClient,
 		resultTable:        resultTable,
 		serverTable:        serverTable,
-		inputChan:          make(chan *models.Task, limit),
-		outputChan:         make(chan *models.Task, limit),
+		inputChan:          make(chan *model.Task, limit),
+		outputChan:         make(chan *model.Task, limit),
 		cache:              cache,
 	}
 }
 
 // Process continuously listens for new jobs and handles them using provide().
 func (inst *UpdateProvider) Process(ctx context.Context) {
+	defer inst.closeChanel()
+
 	inst.log.Info("Start and Wait Task...")
 	for {
 		select {
 		case job := <-inst.inputChan:
-			job.SendProcessLog(&models.ProcessLog{Title: "Скачивание обновлений..."})
+			job.SendProcessLog(&model.ProcessLog{Title: "Скачивание обновлений..."})
 			inst.log.Info("Download started", zap.String("server", job.Server().Name))
 
 			result := inst.buildResult(job)
 
-			malwareErr := inst.handle(job, lib.Malware)
-			rulesErr := inst.handle(job, lib.Rules)
+			malwareErr := inst.handle(job, utils.Malware)
+			rulesErr := inst.handle(job, utils.Rules)
 
 			if malwareErr != nil && rulesErr != nil {
-				job.SendProcessLog(&models.ProcessLog{Title: "Ошибка получения файлов обновления, процесс обновления прерван!"})
+				job.SendProcessLog(&model.ProcessLog{Title: "Ошибка получения файлов обновления, процесс обновления прерван!"})
 				inst.log.Info("Process donwload stoped, all files end with error", zap.String("server", job.Server().Name))
 				inst.complete(job, result)
 				continue
 			}
 
-			job.SendProcessLog(&models.ProcessLog{Title: "Скачивание обновлений завершено!"})
+			job.SendProcessLog(&model.ProcessLog{Title: "Скачивание обновлений завершено!"})
 			inst.log.Info("Download completed", zap.String("server", job.Server().Name))
 			inst.outputChan <- job
 
 		case <-ctx.Done():
 			inst.log.Info("Shutdown signal received. Stopping...")
-			// close(inst.inputChan)
-			// close(inst.outputChan)
 			return
 		}
 	}
 }
 
 // InputChan exposes the input channel for external components to send jobs.
-func (inst *UpdateProvider) InputChan() chan *models.Task {
+func (inst *UpdateProvider) InputChan() chan *model.Task {
 	return inst.inputChan
 }
 
 // OutputChan exposes the output channel to retrieve processed jobs.
-func (inst *UpdateProvider) OutputChan() chan *models.Task {
+func (inst *UpdateProvider) OutputChan() chan *model.Task {
 	return inst.outputChan
 }
 
-func (inst *UpdateProvider) handle(job *models.Task, pkgType lib.PackageType) error {
+func (inst *UpdateProvider) handle(job *model.Task, pkgType utils.PackageType) error {
 	var pkgNameAlias string
 	switch pkgType {
-	case lib.Malware:
-		pkgNameAlias = lib.MalwareNameAlias
-	case lib.Rules:
-		pkgNameAlias = lib.RulesNameAlias
+	case utils.Malware:
+		pkgNameAlias = utils.MalwareNameAlias
+	case utils.Rules:
+		pkgNameAlias = utils.RulesNameAlias
 	default:
 		pkgNameAlias = "\"Unknown\""
 	}
 
-	rulesFile, err := inst.requiredFile(job, lib.Rules)
+	rulesFile, err := inst.requiredFile(job, utils.Rules)
 	if rulesFile != "" && err != nil {
-		job.SendProcessLog(&models.ProcessLog{Title: fmt.Sprintf("Ошибка скачивания файла %s", pkgNameAlias), Description: err.Error()})
+		job.SendProcessLog(&model.ProcessLog{Title: fmt.Sprintf("Ошибка скачивания файла %s", pkgNameAlias), Description: err.Error()})
 		inst.log.Error(fmt.Sprintf("Error download file %s", pkgType.String()), zap.Error(err), zap.String("server", job.Server().Name))
 
 		if val, ok := job.Meta("Error"); ok {
@@ -113,18 +115,18 @@ func (inst *UpdateProvider) handle(job *models.Task, pkgType lib.PackageType) er
 		}
 
 		job.AddMeta("Error", err.Error)
-		job.DeleteMeta(string(lib.Rules))
+		job.DeleteMeta(string(utils.Rules))
 		return err
 	} else if rulesFile != "" && err == nil {
-		job.SendProcessLog(&models.ProcessLog{Title: fmt.Sprintf("Скачивание файла %s успешно завершено!", pkgNameAlias)})
+		job.SendProcessLog(&model.ProcessLog{Title: fmt.Sprintf("Скачивание файла %s успешно завершено!", pkgNameAlias)})
 		inst.log.Info(fmt.Sprintf("Download %s success completed", pkgType.String()), zap.String("server", job.Server().Name))
-		job.AddMeta(string(lib.Rules), rulesFile)
+		job.AddMeta(string(utils.Rules), rulesFile)
 	}
 	return nil
 }
 
 // requiremntPkg processes a job by checking and downloading required packages.
-func (inst *UpdateProvider) requiredFile(job *models.Task, typ lib.PackageType) (string, error) {
+func (inst *UpdateProvider) requiredFile(job *model.Task, typ utils.PackageType) (string, error) {
 	if _, ok := job.Meta(typ.String()); ok {
 		filePath, err := inst.getFile(job, typ)
 		if err != nil {
@@ -137,8 +139,8 @@ func (inst *UpdateProvider) requiredFile(job *models.Task, typ lib.PackageType) 
 }
 
 // buildResult initializes and returns a new Result for a job
-func (inst *UpdateProvider) buildResult(job *models.Task) *models.Result {
-	result := &models.Result{
+func (inst *UpdateProvider) buildResult(job *model.Task) *model.Result {
+	result := &model.Result{
 		UUID:       uuid.NewString(),
 		ServerUUID: job.Server().UUID,
 		TimeEnd:    time.Now(),
@@ -146,7 +148,7 @@ func (inst *UpdateProvider) buildResult(job *models.Task) *models.Result {
 		Rules:      job.Server().RulesStatus,
 	}
 
-	if timeStart, ok := job.Meta(lib.MetaTimeStart); ok {
+	if timeStart, ok := job.Meta(utils.MetaTimeStart); ok {
 		if val, isTime := timeStart.(time.Time); isTime {
 			result.TimeStart = val
 		}
@@ -155,14 +157,14 @@ func (inst *UpdateProvider) buildResult(job *models.Task) *models.Result {
 }
 
 // getFile retrieves the specified package (malware/rules) for the job.
-func (inst *UpdateProvider) getFile(job *models.Task, pkgType lib.PackageType) (string, error) {
+func (inst *UpdateProvider) getFile(job *model.Task, pkgType utils.PackageType) (string, error) {
 	updateList, err := inst.updateServerClient.UpdateList(pkgType)
 	if err != nil {
 		return "", err
 	}
 
 	// Find the most recent package that matches server software version
-	var pkgInfo *models.RrUpdates
+	var pkgInfo *model.RrUpdates
 	for _, u := range updateList {
 		if u.Latest {
 			for _, s := range u.Sw {
@@ -202,7 +204,7 @@ func (inst *UpdateProvider) getFile(job *models.Task, pkgType lib.PackageType) (
 }
 
 // checkCache verifies if a package file already exists in the local cache directory.
-func (inst *UpdateProvider) checkCache(pkgInfo *models.RrUpdates) (string, error) {
+func (inst *UpdateProvider) checkCache(pkgInfo *model.RrUpdates) (string, error) {
 	cacheFiles, err := os.ReadDir(inst.cache)
 	if err != nil {
 		return "", err
@@ -218,22 +220,30 @@ func (inst *UpdateProvider) checkCache(pkgInfo *models.RrUpdates) (string, error
 	return "", nil
 }
 
-func (inst *UpdateProvider) complete(job *models.Task, result *models.Result) {
+func (inst *UpdateProvider) complete(job *model.Task, result *model.Result) {
 	result.TimeEnd = time.Now()
-	job.SendProcessLog(&models.ProcessLog{Title: "Сохранения результата и обновление сервера БД"})
+	job.SendProcessLog(&model.ProcessLog{Title: "Сохранения результата и обновление сервера БД"})
 	if err := inst.serverTable.Update(job.Server()); err != nil {
 		inst.log.Error("Error update server", zap.Error(err), zap.String("server", job.Server().Name))
-		job.SendProcessLog(&models.ProcessLog{Title: "Ошибка обновления сервера в БД", Description: err.Error()})
+		job.SendProcessLog(&model.ProcessLog{Title: "Ошибка обновления сервера в БД", Description: err.Error()})
 	} else {
-		job.SendProcessLog(&models.ProcessLog{Title: "Запись сервера обновлена"})
+		job.SendProcessLog(&model.ProcessLog{Title: "Запись сервера обновлена"})
 	}
 
 	if resultUUID, err := inst.resultTable.Insert(result); err != nil {
 		inst.log.Error("Error insert result", zap.Error(err), zap.String("server", job.Server().Name))
-		job.SendProcessLog(&models.ProcessLog{Title: "Ошибка сохранения результата", Description: err.Error()})
+		job.SendProcessLog(&model.ProcessLog{Title: "Ошибка сохранения результата", Description: err.Error()})
 	} else {
-		job.SendProcessLog(&models.ProcessLog{Title: "Результат успешно сохранен", Description: fmt.Sprintf("Результат можно посмотреть по ID: %s", resultUUID)})
+		job.SendProcessLog(&model.ProcessLog{Title: "Результат успешно сохранен", Description: fmt.Sprintf("Результат можно посмотреть по ID: %s", resultUUID)})
 	}
-	job.SendProcessLog(&models.ProcessLog{Title: "Процесс завершен"})
+	job.SendProcessLog(&model.ProcessLog{Title: "Процесс завершен"})
 	job.SendProcessLog(nil)
+}
+
+func (inst *UpdateProvider) closeChanel() {
+	inst.closeOnce.Do(func() {
+		inst.log.Info("Close chanels")
+		close(inst.inputChan)
+		close(inst.outputChan)
+	})
 }

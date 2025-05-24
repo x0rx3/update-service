@@ -1,34 +1,34 @@
-package database
+package mysql
 
 import (
-	"update-service/pkg/models"
+	"update-service/internal/model"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
-type MySqlServerTable struct {
+type Server struct {
 	log *zap.Logger
 	db  *gorm.DB
 }
 
-func NewMySqlServerTable(log *zap.Logger, db *gorm.DB) *MySqlServerTable {
-	return &MySqlServerTable{
+func NewServer(log *zap.Logger, db *gorm.DB) *Server {
+	return &Server{
 		log: log,
 		db:  db,
 	}
 }
 
-func (inst *MySqlServerTable) SelectAll() ([]models.Server, error) {
-	var servers []models.Server
+func (inst *Server) SelectAll() ([]model.Server, error) {
+	var servers []model.Server
 	if result := inst.db.Find(&servers); result.Error != nil {
 		return nil, result.Error
 	}
 	return servers, nil
 }
 
-func (inst *MySqlServerTable) SelectOne(uuid string) (*models.Server, error) {
-	server := &models.Server{}
+func (inst *Server) SelectOne(uuid string) (*model.Server, error) {
+	server := &model.Server{}
 	if result := inst.db.First(server).Where("uuid = ?", uuid); result.Error != nil {
 		return nil, result.Error
 	}
@@ -36,8 +36,8 @@ func (inst *MySqlServerTable) SelectOne(uuid string) (*models.Server, error) {
 	return server, nil
 }
 
-func (inst *MySqlServerTable) Update(server *models.Server) error {
-	oldServer := &models.Server{}
+func (inst *Server) Update(server *model.Server) error {
+	oldServer := &model.Server{}
 
 	selectResult := inst.db.First(oldServer).Where("uuid = ?", server.UUID)
 	if selectResult.Error != nil {

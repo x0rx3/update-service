@@ -1,8 +1,8 @@
 package tests
 
 import (
-	"update-service/pkg/lib"
-	"update-service/pkg/models"
+	"update-service/internal/model"
+	"update-service/internal/utils"
 )
 
 const (
@@ -32,31 +32,31 @@ const (
 	FailedProvideRulesVersion   = "123456"
 )
 
-var SuccessAllStatus = []models.Status{
-	models.Status{
+var SuccessAllStatus = []model.Status{
+	model.Status{
 		Msg:    "",
 		Status: "",
-		Code:   lib.ERulesExpires,
+		Code:   utils.ERulesExpires,
 	},
-	models.Status{
+	model.Status{
 		Msg:    "",
 		Status: "",
-		Code:   lib.EMalwareBaseExpires,
-	},
-}
-
-var SuccessOnlyMalwareStatus = []models.Status{
-	models.Status{
-		Msg:    "",
-		Status: "",
-		Code:   lib.EMalwareBaseExpires,
+		Code:   utils.EMalwareBaseExpires,
 	},
 }
 
-var SuccessOnlyRulesStatus = []models.Status{
-	models.Status{
+var SuccessOnlyMalwareStatus = []model.Status{
+	model.Status{
 		Msg:    "",
 		Status: "",
-		Code:   lib.ERulesExpires,
+		Code:   utils.EMalwareBaseExpires,
+	},
+}
+
+var SuccessOnlyRulesStatus = []model.Status{
+	model.Status{
+		Msg:    "",
+		Status: "",
+		Code:   utils.ERulesExpires,
 	},
 }

@@ -5,7 +5,7 @@ import (
 	"context"
 	"net"
 	"sync"
-	"update-service/pkg/grpc/gen"
+	"update-service/internal/grpc/gen"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"

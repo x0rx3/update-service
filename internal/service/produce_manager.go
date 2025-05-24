@@ -1,34 +1,34 @@
-package services
+package service
 
 import (
 	"context"
 	"sync"
 	"time"
-	"update-service/pkg/database"
-	"update-service/pkg/models"
+	"update-service/internal/model"
+	"update-service/internal/repository"
 
 	"go.uber.org/zap"
 )
 
 // ProduceManager
 type ProduceManager struct {
-	log         *zap.Logger          // Logger to recodr internal events and errors
-	serverTable database.ServerTable // Interface to store server in db
-	outputChan  chan *models.Task
-	inputChan   chan *models.Task
+	log         *zap.Logger            // Logger to recodr internal events and errors
+	serverTable repository.ServerTable // Interface to store server in db
+	outputChan  chan *model.Task
+	inputChan   chan *model.Task
 	ticker      *time.Ticker
 }
 
 func NewProduceManager(
 	log *zap.Logger,
-	serverTable database.ServerTable,
-	outputChan chan *models.Task,
+	serverTable repository.ServerTable,
+	outputChan chan *model.Task,
 	delay time.Duration,
 	inputLimmit int,
 ) *ProduceManager {
 	return &ProduceManager{
 		log:         log.With(zap.String("component", "Producer")),
-		inputChan:   make(chan *models.Task, inputLimmit),
+		inputChan:   make(chan *model.Task, inputLimmit),
 		serverTable: serverTable,
 		outputChan:  outputChan,
 		ticker:      time.NewTicker(delay),
@@ -51,7 +51,7 @@ func (inst *ProduceManager) Produce(wg *sync.WaitGroup, ctx context.Context) {
 				}
 
 				for _, server := range servers {
-					inst.outputChan <- models.NewTask(&server, nil)
+					inst.outputChan <- model.NewTask(&server, nil)
 				}
 			case Job := <-inst.inputChan:
 				inst.outputChan <- Job
@@ -65,6 +65,6 @@ func (inst *ProduceManager) Produce(wg *sync.WaitGroup, ctx context.Context) {
 	}()
 }
 
-func (inst *ProduceManager) InputChan() chan *models.Task {
+func (inst *ProduceManager) InputChan() chan *model.Task {
 	return inst.inputChan
 }

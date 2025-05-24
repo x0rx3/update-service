@@ -2,8 +2,8 @@ package tests
 
 import (
 	"fmt"
-	"update-service/pkg/lib"
-	"update-service/pkg/models"
+	"update-service/internal/model"
+	"update-service/internal/utils"
 )
 
 type IDSClientTest struct{}
@@ -36,10 +36,10 @@ func (inst *IDSClientTest) SoftVersion(url string) (string, error) {
 	return "3.9", nil
 }
 
-func (inst *IDSClientTest) Status(url string) ([]models.Status, error) {
+func (inst *IDSClientTest) Status(url string) ([]model.Status, error) {
 	switch url {
 	case FailedStatusURL:
-		return []models.Status{}, fmt.Errorf("failed get status")
+		return []model.Status{}, fmt.Errorf("failed get status")
 	case SuccessAllURL:
 		return SuccessAllStatus, nil
 	case SuccessUpdateOnlyMalwareURL:
@@ -51,20 +51,20 @@ func (inst *IDSClientTest) Status(url string) ([]models.Status, error) {
 	}
 }
 
-func (inst *IDSClientTest) Upload(idsUrl, filePath string, pkgType lib.PackageType) error {
-	if idsUrl == SuccessUpdateOnlyMalwareURL && pkgType == lib.Rules {
+func (inst *IDSClientTest) Upload(idsUrl, filePath string, pkgType utils.PackageType) error {
+	if idsUrl == SuccessUpdateOnlyMalwareURL && pkgType == utils.Rules {
 		return fmt.Errorf("failed upload file")
 	}
 
-	if idsUrl == SuccessUpdateOnlyRuleURL && pkgType == lib.Malware {
+	if idsUrl == SuccessUpdateOnlyRuleURL && pkgType == utils.Malware {
 		return fmt.Errorf("failed upload file")
 	}
 
-	if idsUrl == FailedApplyMalwareURL && pkgType == lib.Malware {
+	if idsUrl == FailedApplyMalwareURL && pkgType == utils.Malware {
 		return fmt.Errorf("failed upload file")
 	}
 
-	if idsUrl == FailedApplyRulesURL && pkgType == lib.Rules {
+	if idsUrl == FailedApplyRulesURL && pkgType == utils.Rules {
 		return fmt.Errorf("failed upload file")
 	}
 

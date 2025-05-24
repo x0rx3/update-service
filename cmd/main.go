@@ -9,12 +9,13 @@ import (
 	"os"
 	"sync"
 	"time"
-	"update-service/pkg/configs"
+	"update-service/internal/config"
+	"update-service/internal/grpc"
+	"update-service/internal/logging"
+	"update-service/internal/service"
 	"update-service/pkg/database"
-	"update-service/pkg/grpc"
-	"update-service/pkg/logging"
-	"update-service/pkg/services"
 
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -22,7 +23,10 @@ func main() {
 	configPath := flag.String("config", "../config/config.yaml", "path to config.yaml file")
 	flag.Parse()
 
-	config, err := configs.NewConfig(*configPath)
+	fmt.Println(uuid.NewString())
+	fmt.Println(uuid.NewString())
+
+	config, err := config.NewConfig(*configPath)
 	if err != nil {
 		fmt.Printf("failed read config: %s", err.Error())
 		os.Exit(1)
@@ -41,26 +45,26 @@ func main() {
 		Jar: jar,
 	}
 
-	idsClient := services.NewVIPNetIDSClient(client)
-	updateServerClient := services.NewVIPNetUpdateServerClient(config.UpdateServerUrl, config.UpdateServerLogin, config.UpdateServerPassword, client)
+	idsClient := service.NewVIPNetIDSClient(client)
+	updateServerClient := service.NewVIPNetUpdateServerClient(config.UpdateServerUrl, config.UpdateServerLogin, config.UpdateServerPassword, client)
 
-	updateChecker := services.NewUpdateChecker(log, idsClient, upodateDatabase.ResultTable, upodateDatabase.ServerTable, config.WorkerLimit)
-	updateProvider := services.NewUpdateProvider(log, updateServerClient, upodateDatabase.ResultTable, upodateDatabase.ServerTable, config.Cache, config.WorkerLimit)
-	updateApplier := services.NewUpdateApplier(log, idsClient, upodateDatabase.ResultTable, upodateDatabase.ServerTable, config.WorkerLimit)
+	updateChecker := service.NewUpdateChecker(log, idsClient, upodateDatabase.ResultTable, upodateDatabase.ServerTable, config.WorkerLimit)
+	updateProvider := service.NewUpdateProvider(log, updateServerClient, upodateDatabase.ResultTable, upodateDatabase.ServerTable, config.Cache, config.WorkerLimit)
+	updateApplier := service.NewUpdateApplier(log, idsClient, upodateDatabase.ResultTable, upodateDatabase.ServerTable, config.WorkerLimit)
 
 	var wg sync.WaitGroup
 	ctx := context.Background()
 
-	services.NewPipeline(log, []services.Worker{updateChecker, updateProvider, updateApplier}).Build(&wg, ctx)
-	services.NewWorkerManager(config.WorkerLimit, []services.Worker{updateChecker, updateProvider, updateApplier}).Build(&wg, ctx)
+	service.NewPipeline(log, []service.Worker{updateChecker, updateProvider, updateApplier}).Build(&wg, ctx)
+	service.NewWorkerManager(config.WorkerLimit, []service.Worker{updateChecker, updateProvider, updateApplier}).Build(&wg, ctx)
 
-	producer := services.NewProduceManager(log, upodateDatabase.ServerTable, updateChecker.InputChan(), time.Duration(config.Delay)*time.Hour, config.WorkerLimit)
+	producer := service.NewProduceManager(log, upodateDatabase.ServerTable, updateChecker.InputChan(), time.Duration(config.Delay)*time.Hour, config.WorkerLimit)
 	producer.Produce(&wg, ctx)
 
 	grpc.NewServer(
 		log,
-		services.NewCheckServerGRPCService(
-			services.NewCheckService(upodateDatabase.ServerTable),
+		service.NewCheckServerGRPCService(
+			service.NewCheckService(upodateDatabase.ServerTable),
 			producer.InputChan(),
 			time.Duration(3*time.Minute),
 		),

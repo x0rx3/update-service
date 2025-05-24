@@ -1,13 +1,14 @@
-package services
+package service
 
 import (
 	"context"
 	"fmt"
 	"regexp"
+	"sync"
 	"time"
-	"update-service/pkg/database"
-	"update-service/pkg/lib"
-	"update-service/pkg/models"
+	"update-service/internal/model"
+	"update-service/internal/repository"
+	"update-service/internal/utils"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -21,45 +22,49 @@ var (
 
 // UpdateChecker is responsible for checking whether an update is required on a server.
 type UpdateChecker struct {
-	log         *zap.Logger          // Logger to record internal events and errors
-	resultTable database.ResultTable // Interface to store processing results in DB
-	serverTable database.ServerTable // Interface to store server in DB
-	idsClient   IDSClient            // Client to interact with the ids
-	inputChan   chan *models.Task    // Channel to receive incoming jobs
-	outputChan  chan *models.Task    // Channel to forward jobs after processing
+	log         *zap.Logger            // Logger to record internal events and errors
+	resultTable repository.ResultTable // Interface to store processing results in DB
+	serverTable repository.ServerTable // Interface to store server in DB
+	idsClient   IDSClient              // Client to interact with the ids
+	inputChan   chan *model.Task       // Channel to receive incoming jobs
+	outputChan  chan *model.Task       // Channel to forward jobs after processing
+	closeOnce   sync.Once
 }
 
 // NewUpdateChecker initializes and returns an UpdateChecker.
-func NewUpdateChecker(log *zap.Logger, idsClient IDSClient, resTable database.ResultTable, servTable database.ServerTable, limit int) *UpdateChecker {
+func NewUpdateChecker(log *zap.Logger, idsClient IDSClient, resTable repository.ResultTable, servTable repository.ServerTable, limit int) *UpdateChecker {
 	return &UpdateChecker{
 		log:         log.With(zap.String("component", "UpdateChecker")),
 		resultTable: resTable,
 		serverTable: servTable,
 		idsClient:   idsClient,
-		inputChan:   make(chan *models.Task, limit),
-		outputChan:  make(chan *models.Task, limit),
+		inputChan:   make(chan *model.Task, limit),
+		outputChan:  make(chan *model.Task, limit),
+		closeOnce:   sync.Once{},
 	}
 }
 
 // Process continuously listens for incoming jobs and handles them.
 func (inst *UpdateChecker) Process(ctx context.Context) {
+	defer inst.closeChanel()
+
 	inst.log.Info("Start and Wait Task...")
 	for {
 		select {
 		case job := <-inst.inputChan:
-			job.SendProcessLog(&models.ProcessLog{Title: "Проверка необходимости обновления"})
+			job.SendProcessLog(&model.ProcessLog{Title: "Проверка необходимости обновления"})
 			inst.log.Info("Checking update", zap.String("server", job.Server().Name))
 
 			updated, err := inst.handleJob(job)
 			if err != nil {
-				job.SendProcessLog(&models.ProcessLog{Title: "Ошибка проверки необходимости обнволения", Description: err.Error()})
+				job.SendProcessLog(&model.ProcessLog{Title: "Ошибка проверки необходимости обнволения", Description: err.Error()})
 				inst.log.Error("Error process ckecking update", zap.Error(err), zap.String("server", job.Server().Name))
 				inst.complete(job, err)
 				continue
 			}
 
 			if updated {
-				job.SendProcessLog(&models.ProcessLog{Title: "Обновление не требуется"})
+				job.SendProcessLog(&model.ProcessLog{Title: "Обновление не требуется"})
 				inst.log.Info("Already up to date", zap.String("server", job.Server().Name))
 				inst.complete(job, nil)
 				continue
@@ -74,20 +79,20 @@ func (inst *UpdateChecker) Process(ctx context.Context) {
 }
 
 // InputChan returns the input channel for receiving jobs.
-func (inst *UpdateChecker) InputChan() chan *models.Task {
+func (inst *UpdateChecker) InputChan() chan *model.Task {
 	return inst.inputChan
 }
 
 // OutputChan returns the output channel for forwarding jobs.
-func (inst *UpdateChecker) OutputChan() chan *models.Task {
+func (inst *UpdateChecker) OutputChan() chan *model.Task {
 	return inst.outputChan
 }
 
 // handleJob handles the complete update-checking logic for a single job.
-func (inst *UpdateChecker) handleJob(job *models.Task) (bool, error) {
-	job.AddMeta(lib.MetaTimeStart, time.Now())
+func (inst *UpdateChecker) handleJob(job *model.Task) (bool, error) {
+	job.AddMeta(utils.MetaTimeStart, time.Now())
 
-	lib.EnsureTrailingSlash(&job.Server().Url)
+	utils.EnsureTrailingSlash(&job.Server().Url)
 
 	if err := inst.idsClient.Login(job.Server().Url, job.Server().Login, job.Server().Password); err != nil {
 		inst.log.Error("Authorization error on the server", zap.Error(err))
@@ -115,9 +120,9 @@ func (inst *UpdateChecker) handleJob(job *models.Task) (bool, error) {
 	return false, nil
 }
 
-func (inst *UpdateChecker) complete(job *models.Task, err error) {
-	job.SendProcessLog(&models.ProcessLog{Title: "Сохранения результата и обновление сервера"})
-	result := &models.Result{
+func (inst *UpdateChecker) complete(job *model.Task, err error) {
+	job.SendProcessLog(&model.ProcessLog{Title: "Сохранения результата и обновление сервера"})
+	result := &model.Result{
 		UUID:       uuid.NewString(),
 		ServerUUID: job.Server().UUID,
 		Malware:    job.Server().MalwareStatus,
@@ -129,40 +134,40 @@ func (inst *UpdateChecker) complete(job *models.Task, err error) {
 		result.Errors = err.Error()
 	}
 
-	if t, ok := job.Meta(lib.MetaTimeStart); ok {
+	if t, ok := job.Meta(utils.MetaTimeStart); ok {
 		result.TimeStart = t.(time.Time)
 	}
 
 	if err := inst.serverTable.Update(job.Server()); err != nil {
 		inst.log.Error("Error update server", zap.Error(err), zap.String("server", job.Server().Name))
-		job.SendProcessLog(&models.ProcessLog{Title: "Ошибка обновления сервера в БД", Description: err.Error()})
+		job.SendProcessLog(&model.ProcessLog{Title: "Ошибка обновления сервера в БД", Description: err.Error()})
 	} else {
-		job.SendProcessLog(&models.ProcessLog{Title: "Запись в БД сервера обновлена"})
+		job.SendProcessLog(&model.ProcessLog{Title: "Запись в БД сервера обновлена"})
 	}
 
 	if resultUUID, err := inst.resultTable.Insert(result); err != nil {
 		inst.log.Error("Error insert result", zap.Error(err), zap.String("server", job.Server().Name))
-		job.SendProcessLog(&models.ProcessLog{Title: "Ошибка сохранения результата", Description: err.Error()})
+		job.SendProcessLog(&model.ProcessLog{Title: "Ошибка сохранения результата", Description: err.Error()})
 	} else {
-		job.SendProcessLog(&models.ProcessLog{Title: "Результат успешно сохранен", Description: fmt.Sprintf("Результат можно посмотреть по ID: %s", resultUUID)})
+		job.SendProcessLog(&model.ProcessLog{Title: "Результат успешно сохранен", Description: fmt.Sprintf("Результат можно посмотреть по ID: %s", resultUUID)})
 	}
-	job.SendProcessLog(&models.ProcessLog{Title: "Процесс завершен"})
+	job.SendProcessLog(&model.ProcessLog{Title: "Процесс завершен"})
 	job.SendProcessLog(nil)
 }
 
 // evaluateStatus parses the status codes and updates job fields accordingly.
-func (inst *UpdateChecker) evaluateStatus(status []models.Status, job *models.Task) {
+func (inst *UpdateChecker) evaluateStatus(status []model.Status, job *model.Task) {
 	job.Server().RulesStatus = "updated"
 	job.Server().MalwareStatus = "updated"
 
 	for _, s := range status {
 		switch s.Code {
-		case lib.ERulesExpires:
+		case utils.ERulesExpires:
 			job.Server().RulesStatus = s.Code
-			job.AddMeta(string(lib.Rules), nil)
-		case lib.EMalwareBaseExpires:
+			job.AddMeta(string(utils.Rules), nil)
+		case utils.EMalwareBaseExpires:
 			job.Server().MalwareStatus = s.Code
-			job.AddMeta(string(lib.Malware), nil)
+			job.AddMeta(string(utils.Malware), nil)
 		default:
 			if regRules.MatchString(s.Code) {
 				job.Server().RulesStatus = s.Code
@@ -178,6 +183,14 @@ func (inst *UpdateChecker) evaluateStatus(status []models.Status, job *models.Ta
 }
 
 // isUpdateRequired checks whether the job requires an update based on server status.
-func (inst *UpdateChecker) isUpdateRequired(job *models.Task) bool {
-	return job.Server().RulesStatus == lib.ERulesExpires || job.Server().MalwareStatus == lib.EMalwareBaseExpires
+func (inst *UpdateChecker) isUpdateRequired(job *model.Task) bool {
+	return job.Server().RulesStatus == utils.ERulesExpires || job.Server().MalwareStatus == utils.EMalwareBaseExpires
+}
+
+func (inst *UpdateChecker) closeChanel() {
+	inst.closeOnce.Do(func() {
+		inst.log.Info("Close chanels")
+		close(inst.inputChan)
+		close(inst.outputChan)
+	})
 }

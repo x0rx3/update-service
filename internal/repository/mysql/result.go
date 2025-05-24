@@ -1,26 +1,26 @@
-package database
+package mysql
 
 import (
-	"update-service/pkg/models"
+	"update-service/internal/model"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
-type MySQlResultTable struct {
+type Result struct {
 	log *zap.Logger
 	db  *gorm.DB
 }
 
-func NewMysqlResultTable(log *zap.Logger, db *gorm.DB) *MySQlResultTable {
-	return &MySQlResultTable{
+func NewResult(log *zap.Logger, db *gorm.DB) *Result {
+	return &Result{
 		log: log,
 		db:  db,
 	}
 }
 
-func (inst *MySQlResultTable) Insert(result *models.Result) (string, error) {
+func (inst *Result) Insert(result *model.Result) (string, error) {
 	if result.UUID == "" {
 		result.UUID = uuid.NewString()
 	}

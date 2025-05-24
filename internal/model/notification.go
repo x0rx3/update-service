@@ -1,4 +1,4 @@
-package models
+package model
 
 type ProcessLog struct {
 	Title       string

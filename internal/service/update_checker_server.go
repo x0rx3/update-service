@@ -1,22 +1,22 @@
-package services
+package service
 
 import (
 	"context"
 	"time"
-	"update-service/pkg/grpc/gen"
-	"update-service/pkg/models"
+	"update-service/internal/grpc/gen"
+	"update-service/internal/model"
 )
 
 type UpdateChekerServer struct {
 	gen.UnimplementedUpdateCheckerServer
-	produceChan   chan *models.Task
+	produceChan   chan *model.Task
 	service       Checker
 	requesTimeout time.Duration
 }
 
 func NewCheckServerGRPCService(
 	service Checker,
-	produceChan chan *models.Task,
+	produceChan chan *model.Task,
 	requestTimeout time.Duration,
 ) *UpdateChekerServer {
 	return &UpdateChekerServer{
@@ -32,12 +32,12 @@ func (inst *UpdateChekerServer) CheckUpdate(req *gen.CheckUdateRequest, stream g
 		return err
 	}
 
-	processLogChan := make(chan *models.ProcessLog)
+	processLogChan := make(chan *model.ProcessLog)
 	defer close(processLogChan)
 	ctx, cancel := context.WithTimeout(context.Background(), inst.requesTimeout)
 	defer cancel()
 
-	inst.produceChan <- models.NewTask(server, processLogChan)
+	inst.produceChan <- model.NewTask(server, processLogChan)
 
 	for {
 		select {

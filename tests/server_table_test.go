@@ -1,7 +1,7 @@
 package tests
 
 import (
-	"update-service/pkg/models"
+	"update-service/internal/model"
 )
 
 type ServerTableTest struct{}
@@ -10,15 +10,15 @@ func NewServerTableTest() *ServerTableTest {
 	return &ServerTableTest{}
 }
 
-func (inst *ServerTableTest) SelectOne(uuid string) (*models.Server, error) {
+func (inst *ServerTableTest) SelectOne(uuid string) (*model.Server, error) {
 	if uuid == SuccessGRPCUUID {
 		return SuccessGRPCServer, nil
 	}
 	return FailedGRPCServer, nil
 }
 
-func (inst *ServerTableTest) SelectAll() ([]models.Server, error) {
-	return []models.Server{
+func (inst *ServerTableTest) SelectAll() ([]model.Server, error) {
+	return []model.Server{
 		*SuccessAllServer,
 		*SuccessMalwareServer,
 		*SuccessRulesServer,
@@ -31,6 +31,6 @@ func (inst *ServerTableTest) SelectAll() ([]models.Server, error) {
 	}, nil
 }
 
-func (inst *ServerTableTest) Update(server *models.Server) error {
+func (inst *ServerTableTest) Update(server *model.Server) error {
 	return nil
 }

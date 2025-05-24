@@ -1,4 +1,4 @@
-package models
+package model
 
 type Server struct {
 	UUID          string `json:"uuid" gorm:"<-:false;primaryKey;column:uuid"` // allow read, disable write permissions

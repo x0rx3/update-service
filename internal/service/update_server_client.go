@@ -1,4 +1,4 @@
-package services
+package service
 
 import (
 	"bytes"
@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	libUrl "net/url"
+	urlLib "net/url"
 	"os"
 	"time"
-	"update-service/pkg/lib"
-	"update-service/pkg/models"
+	"update-service/internal/model"
+	"update-service/internal/utils"
 )
 
 type VIPNetUpdateServerClient struct {
@@ -35,7 +35,7 @@ func (inst *VIPNetUpdateServerClient) Login() error {
 		return err
 	}
 
-	data := libUrl.Values{}
+	data := urlLib.Values{}
 	data.Set("login", inst.login)
 	data.Set("password", inst.password)
 	request, err := http.NewRequest("POST", fmt.Sprintf("%v/login", inst.url), bytes.NewBufferString(data.Encode()))
@@ -72,7 +72,7 @@ func (inst *VIPNetUpdateServerClient) Login() error {
 	return nil
 }
 
-func (inst *VIPNetUpdateServerClient) UpdateList(pkgType lib.PackageType) ([]models.RrUpdates, error) {
+func (inst *VIPNetUpdateServerClient) UpdateList(pkgType utils.PackageType) ([]model.RrUpdates, error) {
 	// Create a request to get the updates list
 	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%v/service/updates_list?type=%s", inst.url, pkgType), nil)
 	if err != nil {
@@ -90,7 +90,7 @@ func (inst *VIPNetUpdateServerClient) UpdateList(pkgType lib.PackageType) ([]mod
 	}
 
 	// Parse the response to extract package information
-	updateList := &models.UpdateListResponse{}
+	updateList := &model.UpdateListResponse{}
 	err = json.NewDecoder(response.Body).Decode(updateList)
 	if err != nil {
 		return nil, err
@@ -100,7 +100,7 @@ func (inst *VIPNetUpdateServerClient) UpdateList(pkgType lib.PackageType) ([]mod
 }
 
 // Download downloads a package from the update server.
-func (inst *VIPNetUpdateServerClient) Download(pkgType lib.PackageType, pkgInfo *models.RrUpdates, dir4Save string) (string, error) {
+func (inst *VIPNetUpdateServerClient) Download(pkgType utils.PackageType, pkgInfo *model.RrUpdates, dir4Save string) (string, error) {
 	contextWithTimeout, cancelFunc := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancelFunc()
 	// Create a download request

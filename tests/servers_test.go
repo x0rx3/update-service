@@ -1,12 +1,12 @@
 package tests
 
 import (
-	"update-service/pkg/models"
+	"update-service/internal/model"
 
 	"github.com/google/uuid"
 )
 
-var SuccessAllServer = &models.Server{
+var SuccessAllServer = &model.Server{
 	UUID:          uuid.NewString(),
 	Url:           SuccessAllURL,
 	Name:          "SuccessAllPKg-Server",
@@ -16,7 +16,7 @@ var SuccessAllServer = &models.Server{
 	RulesStatus:   "",
 	MalwareStatus: "",
 }
-var SuccessMalwareServer = &models.Server{
+var SuccessMalwareServer = &model.Server{
 	UUID:          uuid.NewString(),
 	Url:           SuccessUpdateOnlyMalwareURL,
 	Name:          "SuccessMalware-Server",
@@ -26,7 +26,7 @@ var SuccessMalwareServer = &models.Server{
 	RulesStatus:   "",
 	MalwareStatus: "",
 }
-var SuccessRulesServer = &models.Server{
+var SuccessRulesServer = &model.Server{
 	UUID:          uuid.NewString(),
 	Url:           SuccessUpdateOnlyRuleURL,
 	Name:          "SuccessMalware-Server",
@@ -36,7 +36,7 @@ var SuccessRulesServer = &models.Server{
 	RulesStatus:   "",
 	MalwareStatus: "",
 }
-var FailedLoginServer = &models.Server{
+var FailedLoginServer = &model.Server{
 	UUID:          uuid.NewString(),
 	Url:           FailedLoginURL,
 	Name:          "FailedLogin-Server",
@@ -46,7 +46,7 @@ var FailedLoginServer = &models.Server{
 	RulesStatus:   "",
 	MalwareStatus: "",
 }
-var FailedSoftVersionSever = &models.Server{
+var FailedSoftVersionSever = &model.Server{
 	UUID:          uuid.NewString(),
 	Url:           FailedSoftVersionURL,
 	Name:          "FailedSoftVersion-Server",
@@ -56,7 +56,7 @@ var FailedSoftVersionSever = &models.Server{
 	RulesStatus:   "",
 	MalwareStatus: "",
 }
-var FailedProvideMalwareServer = &models.Server{
+var FailedProvideMalwareServer = &model.Server{
 	UUID:          uuid.NewString(),
 	Url:           FailedProvideMalwareURL,
 	Name:          "FailedProvideMalware",
@@ -66,7 +66,7 @@ var FailedProvideMalwareServer = &models.Server{
 	RulesStatus:   "",
 	MalwareStatus: "",
 }
-var FailedProvideRulesServer = &models.Server{
+var FailedProvideRulesServer = &model.Server{
 	UUID:          uuid.NewString(),
 	Url:           FailedProvideRulesURL,
 	Name:          "FailedProvideRules-Server",
@@ -76,7 +76,7 @@ var FailedProvideRulesServer = &models.Server{
 	RulesStatus:   "",
 	MalwareStatus: "",
 }
-var FailedApplyMalwareServer = &models.Server{
+var FailedApplyMalwareServer = &model.Server{
 	UUID:          uuid.NewString(),
 	Url:           FailedApplyMalwareURL,
 	Name:          "FailedApplyMalware-Server",
@@ -86,7 +86,7 @@ var FailedApplyMalwareServer = &models.Server{
 	RulesStatus:   "",
 	MalwareStatus: "",
 }
-var FailedApplyRulesServer = &models.Server{
+var FailedApplyRulesServer = &model.Server{
 	UUID:          uuid.NewString(),
 	Url:           FailedApplyRulesURL,
 	Name:          "FailedApplyRUles-Server",
@@ -96,7 +96,7 @@ var FailedApplyRulesServer = &models.Server{
 	RulesStatus:   "",
 	MalwareStatus: "",
 }
-var SuccessGRPCServer = &models.Server{
+var SuccessGRPCServer = &model.Server{
 	UUID:          SuccessGRPCUUID,
 	Url:           SuccessGRPCURL,
 	Name:          "SuccessGRPC-Server",
@@ -106,7 +106,7 @@ var SuccessGRPCServer = &models.Server{
 	RulesStatus:   "",
 	MalwareStatus: "",
 }
-var FailedGRPCServer = &models.Server{
+var FailedGRPCServer = &model.Server{
 	UUID:          FailedGRPCUUID,
 	Url:           FailedGRPCURL,
 	Name:          "SuccessGRPC-Server",

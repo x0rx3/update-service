@@ -7,10 +7,10 @@ import (
 	"sync"
 	"testing"
 	"time"
-	grpcLib "update-service/pkg/grpc"
-	"update-service/pkg/grpc/gen"
-	"update-service/pkg/logging"
-	"update-service/pkg/services"
+	grpcLib "update-service/internal/grpc"
+	"update-service/internal/grpc/gen"
+	"update-service/internal/logging"
+	"update-service/internal/service"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -21,24 +21,24 @@ func TestMain(t *testing.T) {
 	var (
 		wg             sync.WaitGroup
 		ctx, cancel    = context.WithCancel(context.Background())
-		testDelay      = time.Duration(10) * time.Minute
-		requestTimeout = time.Duration(10) * time.Minute
-		sleepTimeDelay = time.Duration(15) * time.Minute
+		testDelay      = time.Duration(10) * time.Second
+		requestTimeout = time.Duration(10) * time.Second
+		sleepTimeDelay = time.Duration(2) * time.Second
 	)
 	log := logging.InitLogger("debug")
-	updateChecker := services.NewUpdateChecker(log, NewIdsClientTest(), NewResultTableTest(), NewServerTableTest(), 3)
-	updateProvider := services.NewUpdateProvider(log, NewUpdateServerClientTest(), NewResultTableTest(), NewServerTableTest(), "./cache", 3)
-	updateApplier := services.NewUpdateApplier(log, NewIdsClientTest(), NewResultTableTest(), NewServerTableTest(), 3)
+	updateChecker := service.NewUpdateChecker(log, NewIdsClientTest(), NewResultTableTest(), NewServerTableTest(), 3)
+	updateProvider := service.NewUpdateProvider(log, NewUpdateServerClientTest(), NewResultTableTest(), NewServerTableTest(), "./cache", 3)
+	updateApplier := service.NewUpdateApplier(log, NewIdsClientTest(), NewResultTableTest(), NewServerTableTest(), 3)
 
-	services.NewWorkerManager(3, []services.Worker{updateChecker, updateProvider, updateApplier}).Build(&wg, ctx)
-	services.NewPipeline(log, []services.Worker{updateChecker, updateProvider, updateApplier}).Build(&wg, ctx)
-	producer := services.NewProduceManager(log, NewServerTableTest(), updateChecker.InputChan(), testDelay, 3)
+	service.NewWorkerManager(3, []service.Worker{updateChecker, updateProvider, updateApplier}).Build(&wg, ctx)
+	service.NewPipeline(log, []service.Worker{updateChecker, updateProvider, updateApplier}).Build(&wg, ctx)
+	producer := service.NewProduceManager(log, NewServerTableTest(), updateChecker.InputChan(), testDelay, 3)
 	producer.Produce(&wg, ctx)
 
 	grpcLib.NewServer(
 		log,
-		services.NewCheckServerGRPCService(
-			services.NewCheckService(NewServerTableTest()),
+		service.NewCheckServerGRPCService(
+			service.NewCheckService(NewServerTableTest()),
 			producer.InputChan(),
 			requestTimeout,
 		),

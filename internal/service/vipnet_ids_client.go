@@ -1,4 +1,4 @@
-package services
+package service
 
 import (
 	"bytes"
@@ -14,8 +14,8 @@ import (
 	"os"
 	"regexp"
 	"time"
-	"update-service/pkg/lib"
-	"update-service/pkg/models"
+	"update-service/internal/model"
+	"update-service/internal/utils"
 )
 
 type VIPNetIDSClient struct {
@@ -99,7 +99,7 @@ func (inst *VIPNetIDSClient) SoftVersion(idsUrl string) (string, error) {
 }
 
 // Status retrieves the current status of the server from its dashboard.
-func (inst *VIPNetIDSClient) Status(idsUrl string) ([]models.Status, error) {
+func (inst *VIPNetIDSClient) Status(idsUrl string) ([]model.Status, error) {
 	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%vservice/dashboard", idsUrl), nil)
 	if err != nil {
 		return nil, err
@@ -116,7 +116,7 @@ func (inst *VIPNetIDSClient) Status(idsUrl string) ([]models.Status, error) {
 
 	defer resp.Body.Close()
 
-	rule := models.Responce{}
+	rule := model.Responce{}
 	err = json.NewDecoder(resp.Body).Decode(&rule)
 	if err != nil {
 		return nil, err
@@ -125,7 +125,7 @@ func (inst *VIPNetIDSClient) Status(idsUrl string) ([]models.Status, error) {
 	return rule.Data.Status, nil
 }
 
-func (inst *VIPNetIDSClient) Upload(idsUrl, filePath string, pkgType lib.PackageType) error {
+func (inst *VIPNetIDSClient) Upload(idsUrl, filePath string, pkgType utils.PackageType) error {
 	var buf bytes.Buffer
 
 	writer := multipart.NewWriter(&buf)
@@ -216,7 +216,7 @@ func (inst *VIPNetIDSClient) Upload(idsUrl, filePath string, pkgType lib.Package
 	}
 
 	// Parse server response
-	updateMalwareResponse := &models.Responce{}
+	updateMalwareResponse := &model.Responce{}
 
 	err = json.NewDecoder(resp.Body).Decode(updateMalwareResponse)
 	if err != nil {

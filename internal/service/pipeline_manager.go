@@ -1,9 +1,9 @@
-package services
+package service
 
 import (
 	"context"
 	"sync"
-	"update-service/pkg/models"
+	"update-service/internal/model"
 
 	"go.uber.org/zap"
 )
@@ -31,7 +31,7 @@ func (inst *PipelineManager) Build(wg *sync.WaitGroup, ctx context.Context) {
 		outputChan := inst.worker[i].OutputChan()
 		inputChan := inst.worker[i+1].InputChan()
 
-		go func(out chan *models.Task, in chan *models.Task) {
+		go func(out chan *model.Task, in chan *model.Task) {
 			defer wg.Done()
 
 			for {

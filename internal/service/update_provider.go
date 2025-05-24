@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync"
 	"time"
 	"update-service/internal/model"
 	"update-service/internal/repository"
@@ -25,7 +24,6 @@ type UpdateProvider struct {
 	inputChan          chan *model.Task       // Channel to receive incoming jobs
 	outputChan         chan *model.Task       // Channel to forward jobs after processing
 	cache              string                 // Path to local cache directory
-	closeOnce          sync.Once
 }
 
 // NewUpdateProvider creates a new instance of UpdateProvider.
@@ -50,8 +48,6 @@ func NewUpdateProvider(
 
 // Process continuously listens for new jobs and handles them using provide().
 func (inst *UpdateProvider) Process(ctx context.Context) {
-	defer inst.closeChanel()
-
 	inst.log.Info("Start and Wait Task...")
 	for {
 		select {
@@ -238,12 +234,4 @@ func (inst *UpdateProvider) complete(job *model.Task, result *model.Result) {
 	}
 	job.SendProcessLog(&model.ProcessLog{Title: "Процесс завершен"})
 	job.SendProcessLog(nil)
-}
-
-func (inst *UpdateProvider) closeChanel() {
-	inst.closeOnce.Do(func() {
-		inst.log.Info("Close chanels")
-		close(inst.inputChan)
-		close(inst.outputChan)
-	})
 }

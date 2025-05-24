@@ -53,11 +53,10 @@ func (inst *ProduceManager) Produce(wg *sync.WaitGroup, ctx context.Context) {
 				for _, server := range servers {
 					inst.outputChan <- model.NewTask(&server, nil)
 				}
+
 			case Job := <-inst.inputChan:
 				inst.outputChan <- Job
 			case <-ctx.Done():
-				close(inst.inputChan)
-				close(inst.outputChan)
 				inst.log.Info("Shutdown signal received. Stopping...")
 				return
 			}

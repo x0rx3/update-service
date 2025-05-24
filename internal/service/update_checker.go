@@ -40,14 +40,11 @@ func NewUpdateChecker(log *zap.Logger, idsClient IDSClient, resTable repository.
 		idsClient:   idsClient,
 		inputChan:   make(chan *model.Task, limit),
 		outputChan:  make(chan *model.Task, limit),
-		closeOnce:   sync.Once{},
 	}
 }
 
 // Process continuously listens for incoming jobs and handles them.
 func (inst *UpdateChecker) Process(ctx context.Context) {
-	defer inst.closeChanel()
-
 	inst.log.Info("Start and Wait Task...")
 	for {
 		select {
@@ -185,12 +182,4 @@ func (inst *UpdateChecker) evaluateStatus(status []model.Status, job *model.Task
 // isUpdateRequired checks whether the job requires an update based on server status.
 func (inst *UpdateChecker) isUpdateRequired(job *model.Task) bool {
 	return job.Server().RulesStatus == utils.ERulesExpires || job.Server().MalwareStatus == utils.EMalwareBaseExpires
-}
-
-func (inst *UpdateChecker) closeChanel() {
-	inst.closeOnce.Do(func() {
-		inst.log.Info("Close chanels")
-		close(inst.inputChan)
-		close(inst.outputChan)
-	})
 }

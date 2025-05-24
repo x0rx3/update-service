@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 	"update-service/internal/model"
 	"update-service/internal/repository"
@@ -21,7 +20,6 @@ type UpdateApplier struct {
 	serverTable     repository.ServerTable // Interface to store server in DB
 	inputChan       chan *model.Task       // Channel to receive tasks for processing
 	outputChan      chan *model.Task       // Channel to send tasks after processing
-	closeOnce       sync.Once
 }
 
 // NewUpdateApplier constructs a new instance of UpdateApplier
@@ -39,14 +37,13 @@ func NewUpdateApplier(
 		serverTable:     serverTable,
 		inputChan:       make(chan *model.Task, limit),
 		outputChan:      make(chan *model.Task, limit),
-		closeOnce:       sync.Once{},
 	}
 }
 
 // Process listens to the input channel and starts processing tasks
 func (inst *UpdateApplier) Process(ctx context.Context) {
 	inst.log.Info("Start and Wait Task...")
-	defer inst.closeChanel()
+
 	for {
 		select {
 		case job := <-inst.inputChan:
@@ -195,12 +192,4 @@ func (inst *UpdateApplier) complete(job *model.Task, result *model.Result) {
 	}
 	job.SendProcessLog(&model.ProcessLog{Title: "Процесс завершен"})
 	job.SendProcessLog(nil)
-}
-
-func (inst *UpdateApplier) closeChanel() {
-	inst.closeOnce.Do(func() {
-		inst.log.Info("Close chanels")
-		close(inst.inputChan)
-		close(inst.outputChan)
-	})
 }
